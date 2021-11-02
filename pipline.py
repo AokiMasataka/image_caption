@@ -4,10 +4,10 @@ from torch.utils.data import Dataset, DataLoader
 from torch.nn.utils.rnn import pad_sequence
 from torchvision.io import read_image
 from torchvision.io.image import ImageReadMode
-from torchvision.transforms import Compose, Resize, ColorJitter, RandomPerspective
+from torchvision.transforms import Compose, Resize, ColorJitter, RandomPerspective, InterpolationMode
 
 
-def get_loader(data, image_dir, image_size, batch_size, tokenizer, train: bool):
+def get_loader(data, image_dir, image_size, batch_size, tokenizer, train=False):
     transform = get_transform(image_size, train)
     dataset = StairDataset(data, image_dir, tokenizer, transform)
     return DataLoader(
@@ -30,6 +30,7 @@ class StairDataset(Dataset):
         loc = self.data[index]
         text_ids = self.tokenizer.encode(loc['caption'])
         text_ids = torch.tensor(text_ids, dtype=torch.long)
+        text_ids = text_ids[:]
 
         file_name = loc['file_name']
         if 'train' in file_name:
@@ -62,7 +63,7 @@ def get_transform(image_size, train=True):
         transform = Compose([
             ColorJitter(brightness=0.8, contrast=0.8, saturation=0.8),
             RandomPerspective(distortion_scale=0.2, p=0.5),
-            Resize((image_size, image_size))
+            Resize((image_size, image_size), interpolation=InterpolationMode.BILINEAR)
         ])
     else:
         transform = Compose([

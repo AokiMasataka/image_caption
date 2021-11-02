@@ -1,5 +1,6 @@
 import torch
 from torch import nn
+from torch.nn import functional
 from .transformer_base import EncoderLayer, Encoder, Decoder, PositionalEmbedding, VisionEmbedding
 
 
@@ -44,54 +45,28 @@ class Transformer(nn.Module):
         self.decoder = Decoder(
             dim=cnf.dim, heads=cnf.heads, depth=cnf.decoder_depth, vocab_size=vocab_size, max_len=cnf.max_seq_len
         )
-
-    def forward(self, image, target, mask=None):
-        memory = self.encoder(image)
-        return self.decoder(target, memory, mask)
-
-    def forward_ones(self, image, max_seq_len):
-        b = image.shape[0]
-        memory = self.encoder(image)
-        seq = torch.full((b, 1), fill_value=2, dtype=torch.long, device='cuda')
-
-        for i in range(max_seq_len):
-            logit = self.decoder(seq, memory, mask=None)
-            logit = logit[:, -1, :].argmax(1).view(-1, 1)
-            seq = torch.cat((seq, logit), dim=1)
-        return seq
-
-
-class Parallel(nn.Module):
-    def __init__(self, cnf, vocab_size):
-        super(Parallel, self).__init__()
-        self.encoder = VisionTransformer(
-            image_size=cnf.image_size,
-            patch_size=cnf.patch_size,
-            dim=cnf.dim,
-            depth=cnf.encoder_depth,
-            heads=cnf.heads,
-            drop_prob=cnf.drop_prob,
-            length_pred=False
-        )
-
-        self.decoder = Decoder(
-            dim=cnf.dim, heads=cnf.heads, depth=cnf.decoder_depth, vocab_size=vocab_size, max_len=cnf.max_seq_len
-        )
-
-        self.length_predict = nn.Linear(in_features=cnf.dim, out_features=cnf.max_seq_len)
         self.max_seq_len = cnf.max_seq_len
+        self.vocab_size = vocab_size
 
-    def forward(self, image, target=None, mask=None):
+    def forward(self, image, target, labels, mask=None):
         memory = self.encoder(image)
-        length, memory = memory[:, 0, :], memory[:, 1:, :]
-        length = self.length_predict(length).argmax(dim=1)
+        logits = self.decoder(target, memory, mask)
 
-        if target is None:
-            target = torch.zeros((length.shape[0], self.max_seq_len), dtype=torch.long, device='cuda')
-            for i in range(target):
-                target[i, :length[i]] = 4
+        logits = logits.view(-1, self.vocab_size)
+        labels = labels.view(-1)
+        return functional.cross_entropy(logits, labels, ignore_index=0)
 
-        return self.decoder(target, memory)
+    @torch.inference_mode()
+    def inference(self, image):
+        device = 'cuda' if torch.cuda.is_available() else 'cpu'
+        memory = self.encoder(image)
+        sequence = torch.full((1, 1), fill_value=2, dtype=torch.long, device=device)
+
+        for i in range(self.max_seq_len):
+            logit = self.decoder(sequence, memory, mask=None)
+            logit = logit[:, -1, :].argmax(dim=1).view(-1, 1)
+            sequence = torch.cat((sequence, logit), dim=1)
+        return sequence
 
 
 # [PAD] 0

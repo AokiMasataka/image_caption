@@ -41,7 +41,7 @@ class Bridge(nn.Module):
 
 
 class PositionNonAutoregressiveTransformer(nn.Module):
-    def __init__(self, cnf, vocab_size):
+    def __init__(self, cnf, vocab_size, max_seq_len):
         super(PositionNonAutoregressiveTransformer, self).__init__()
         self.encoder = VisionTransformer(
             image_size=cnf.image_size,
@@ -60,11 +60,13 @@ class PositionNonAutoregressiveTransformer(nn.Module):
 
         self.position_predictor = PositionPredictor(dim=cnf.dim, heads=cnf.heads, depth=4, drop_prob=cnf.drop_prob)
         self.bridge = Bridge(dim=cnf.dim)
+        self.max_seq_len = max_seq_len
 
     def forward(self, images, target=None, mask=None):
         memory = self.encoder(images)
 
         x = self.bridge(memory)
+        x = x[:, :self.max_seq_len, :]
         pos = self.position_predictor(x)
 
         x = self.decoder(x + pos, memory, mask=None)
