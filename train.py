@@ -121,6 +121,7 @@ def inference():
     tokenizer = AutoTokenizer.from_pretrained(Config.tokenizer_name)
     vocab_size = tokenizer.get_vocab().__len__()
     model = Transformer(Config, vocab_size).to(Config.device)
+    model.load_state_dict(torch.load(args.weight))
     model.eval()
     return _inference(model, tokenizer, args.image_path)
 

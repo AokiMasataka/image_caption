@@ -64,8 +64,10 @@ class Transformer(nn.Module):
 
         for i in range(self.max_seq_len):
             logit = self.decoder(sequence, memory, mask=None)
-            logit = logit[:, -1, :].argmax(dim=1).view(-1, 1)
-            sequence = torch.cat((sequence, logit), dim=1)
+            logit = logit[:, -1, :].argmax(dim=1)
+            sequence = torch.cat((sequence, logit.unsqueeze(0)), dim=1)
+            if logit.item() == 3:
+                break
         return sequence
 
 
