@@ -45,11 +45,11 @@ class StairDataset(Dataset):
 
 
 def collate_fn(batch):
-    images, text_ids = list(zip(*batch))
+    images, text_ids, text_len = list(zip(*batch))
     text_ids = pad_sequence(text_ids, batch_first=True)
     target = text_ids[:, :-1]
     label = text_ids[:, 1:]
-    text_len = torch.tensor(text_ids, dtype=torch.long)
+    text_len = torch.tensor(text_len, dtype=torch.long)
     
     seq_mask = get_seq_mask(target)
     pad_mask = get_pad_mask(target)
