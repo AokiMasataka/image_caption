@@ -48,7 +48,12 @@ class Transformer(nn.Module):
         self.max_seq_len = cnf.max_seq_len
         self.vocab_size = vocab_size
 
-    def forward(self, image, target, labels, mask=None):
+    def forward(self, inputs: dict):
+        image = inputs['image']
+        target = inputs['target']
+        labels = inputs['label']
+        mask = inputs['mask']
+
         memory = self.encoder(image)
         logits = self.decoder(target, memory, mask)
 

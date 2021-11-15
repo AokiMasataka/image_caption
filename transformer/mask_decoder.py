@@ -1,4 +1,5 @@
 from torch import nn
+from torch.nn import functional
 
 from .transformer import Decoder, VisionTransformer
 
@@ -23,12 +24,33 @@ class MaskTransformer(nn.Module):
             vocab_size=vocab_size, max_len=config.max_seq_len
         )
 
-        self.lenght_pred = nn.Linear(config.dim, config.max_seq_len)
+        self.length_pred = nn.Linear(config.dim, config.max_seq_len)
+        self.vocab_size = vocab_size
 
-    def forward(self, x, target, mask=None):
-        x = self.encoder(x)
-        lenght = x[:, 1, :]
+    def forward(self, inputs: dict, x, target, mask=None):
+        image = inputs['image']
+        label = inputs['label']
+        text_len = inputs['text_len']
+        mask = inputs['mask']
+
+        x = self.encoder(image)
         memory = x[:, 1:, :]
+        length = x[:, 1, :]
+        length = self.length_pred(length)
 
-        logit = self.decoder(target, memory, mask)
-        return logit, lenght
+        logit = self.decoder(label, memory, mask)
+        
+        logit_loss = functional.cross_entropy(logit.view(-1, self.vocab_size), label.view(-1), ignore=0)
+        length_loss = functional.cross_entropy(length, text_len)
+        return logit_loss + length_loss
+    
+    def inference(self, image):
+        x = self.encoder(image)
+        memory = x[:, 1:, :]
+        text_length = self.length_pred(x[:, 1, :])
+
+        query = troch.zeros(text_length.shape[1], dtype=torch.long).unsqueeze(0)
+
+        for n in range(3):
+            query = self.decoder(query, memory)
+        return query

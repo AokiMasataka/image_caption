@@ -30,19 +30,18 @@ class StairDataset(Dataset):
         loc = self.data[index]
         text_ids = self.tokenizer.encode(loc['caption'])
         text_ids = torch.tensor(text_ids, dtype=torch.long)
-        text_ids = text_ids[:]
+        text_len = text_ids.shape[0]
 
         file_name = loc['file_name']
         if 'train' in file_name:
             image_path = 'D:/data_set/COCO_images/train2014/' + file_name
         else:
             image_path = 'D:/data_set/COCO_images/val2014/' + file_name
-        # image_path = self.image_dir + loc['file_name']
         image = read_image(image_path, mode=ImageReadMode.RGB)
         image = self.transform(image)
         image = image.float() / 255.0
 
-        return image, text_ids
+        return image, text_ids, text_len
 
 
 def collate_fn(batch):
@@ -50,12 +49,14 @@ def collate_fn(batch):
     text_ids = pad_sequence(text_ids, batch_first=True)
     target = text_ids[:, :-1]
     label = text_ids[:, 1:]
+    text_len = torch.tensor(text_ids, dtype=torch.long)
+    
     seq_mask = get_seq_mask(target)
     pad_mask = get_pad_mask(target)
     mask = seq_mask & pad_mask
 
     images = torch.stack(images)
-    return images, target, label, mask
+    return images, target, label, text_len, mask
 
 
 def get_transform(image_size, train=True):

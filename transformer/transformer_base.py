@@ -11,7 +11,7 @@ class Decoder(nn.Module):
         self.decoder_layers = nn.ModuleList([
             DecoderLayer(dim, heads, drop_prob=drop_prob, attention_drop_prob=drop_prob) for _ in range(depth)
         ])
-        self.logit = nn.Linear(dim, vocab_size)
+        self.logit = nn.Linear(dim, vocab_size, bias=False)
 
     def forward(self, x, memory, mask):
         x = self.embed(x)
@@ -72,11 +72,10 @@ class MultiHeadAttention(nn.Module):
         self.h = heads
         self.drop_prob = drop_prob
 
-        self.q_linear = nn.Linear(dim, dim)
-        self.v_linear = nn.Linear(dim, dim)
-        self.k_linear = nn.Linear(dim, dim)
-        self.dropout = nn.Dropout(drop_prob)
-        self.out = nn.Linear(dim, dim)
+        self.q_linear = nn.Linear(dim, dim, bias=False)
+        self.v_linear = nn.Linear(dim, dim, bias=False)
+        self.k_linear = nn.Linear(dim, dim, bias=False)
+        self.fc = nn.Linear(dim, dim, bias=False)
         self.norm = nn.LayerNorm(dim, eps=1e-8)
 
     def forward(self, q, k, v, mask=None):
@@ -99,7 +98,7 @@ class MultiHeadAttention(nn.Module):
         q = functional.softmax(q, dim=-1)   # mask
         q = functional.dropout(q, p=self.drop_prob, training=self.training)
         q = torch.matmul(q, v).transpose(1, 2).contiguous().view(bs, -1, self.dim)
-        q = functional.dropout(self.out(q), p=self.drop_prob, training=self.training)
+        q = functional.dropout(self.fc(q), p=self.drop_prob, training=self.training)
         return self.norm(q + residual)
 
 
@@ -135,8 +134,3 @@ class VisionEmbedding(nn.Module):
 
     def forward(self, image):
         return self.vision_embed(image).flatten(2).transpose(1, 2)
-
-
-@torch.jit.script
-def mish(x):
-    return x * torch.tanh(functional.softplus(x))

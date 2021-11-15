@@ -36,7 +36,7 @@ class Config:
     drop_prob = 0.125
 
     epochs = 4
-    batch_size = 8
+    batch_size = 16
     lr = 0.00005
     check_point_step = 4000
     device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
@@ -65,19 +65,22 @@ class Trainer(Config):
 
     def train_epoch(self, epoch):
         train_loss = AvgManager()
-        for step, (images, target, labels, mask) in enumerate(self.train_loader, 1):
+        for step, (images, target, labels, text_len, mask) in enumerate(self.train_loader, 1):
             if step % Config.check_point_step == 0:
                 print(f'\rstep: {step}   train loss: {train_loss():.4f}')
                 logger.info(f'step: {step}   train loss: {train_loss():.4f}')
                 self._test_fn()
-
-            images = images.to(self.device)
-            target = target.to(self.device)
-            labels = labels.to(self.device)
-            mask = mask.to(self.device)
+            
+            inputs = {
+                'image': images.to(self.device),
+                'target': target.to(self.device),
+                'label': labels.to(self.device),
+                'text_len': text_len.to(self.device),
+                'mask': mask.to(self.device)
+            }
 
             self.optimizer.zero_grad()
-            loss = self.model(images, target, labels, mask)
+            loss = self.model(inputs)
             loss.backward()
             self.optimizer.step()
 
