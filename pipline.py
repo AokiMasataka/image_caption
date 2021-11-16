@@ -7,7 +7,7 @@ from torchvision.io.image import ImageReadMode
 from torchvision.transforms import Compose, Resize, ColorJitter, RandomPerspective, InterpolationMode
 
 
-def get_loader(data, image_dir, image_size, batch_size, tokenizer, train=False):
+def build_loader(data, image_dir, image_size, batch_size, tokenizer, train=False):
     transform = get_transform(image_size, train)
     dataset = StairDataset(data, image_dir, tokenizer, transform)
     return DataLoader(

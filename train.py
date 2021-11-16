@@ -7,7 +7,7 @@ from torchvision.io.image import ImageReadMode
 from torchvision.transforms import Resize
 from transformers import AutoTokenizer
 
-from pipline import get_loader
+from pipline import build_loader
 from transformer import Transformer, PositionNonAutoregressiveTransformer, MaskTransformer
 
 
@@ -20,9 +20,7 @@ class Config:
     train_pickle_path = 'stair_captions/stair_captions_train.pickle'
     valid_image_dir = 'D:/data_set/COCO_images/val2014/'
     valid_pickle_path = 'stair_captions/stair_captions_valid.pickle'
-    # exp = 0
-    # log_path = f'exp/exp_{exp}/train.txt'
-    # weight_dir = f'exp/exp_{exp}/weight'
+
     log_path = f'exp/{model_name}/train.txt'
     weight_dir = f'exp/{model_name}/weight'
 
@@ -141,7 +139,7 @@ def main():
     train_list = train_list + valid_list
     del valid_list
 
-    train_loader = get_loader(train_list, Config.train_image_dir, Config.image_size, Config.batch_size, tokenizer)
+    train_loader = build_loader(train_list, Config.train_image_dir, Config.image_size, Config.batch_size, tokenizer)
     vocab_size = tokenizer.get_vocab().__len__()
     if Config.model_name == 'baseline':
         model = Transformer(Config, vocab_size)
