@@ -1,6 +1,5 @@
 from torch import nn
 import torch
-from torch._C import dtype
 from torch.nn import functional
 
 from .transformer import Decoder, VisionTransformer
