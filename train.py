@@ -8,7 +8,7 @@ from torchvision.io.image import ImageReadMode
 from torchvision.transforms import Resize
 from transformers import AutoTokenizer
 
-from pipline import build_loader
+from pipeline import build_loader
 from transformer import build_model
 
 
