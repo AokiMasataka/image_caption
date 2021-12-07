@@ -2,6 +2,7 @@ import os
 import logging
 import pickle
 import torch
+from pathlib import Path
 from torchvision.io import read_image
 from torchvision.io.image import ImageReadMode
 from torchvision.transforms import Resize
@@ -15,10 +16,11 @@ class Config:
     # model name in 'baseline', 'PNAT', 'mask transform'
     model_name = 'baseline'
     tokenizer_name = 'cl-tohoku/bert-base-japanese-whole-word-masking'
-
-    train_image_dir = 'D:/data_set/COCO_images/train2014/'
+    
+    home = Path(os.path.expanduser('~'))
+    train_image_dir = home / 'dataset/coco_images/train2014/'
     train_pickle_path = 'stair_captions/stair_captions_train.pickle'
-    valid_image_dir = 'D:/data_set/COCO_images/val2014/'
+    valid_image_dir = home / 'dataset/COCO_images/val2014/'
     valid_pickle_path = 'stair_captions/stair_captions_valid.pickle'
 
     log_path = f'exp/{model_name}/train.txt'
@@ -95,10 +97,10 @@ class Trainer(Config):
     def _test_fn(self):
         self.model.eval()
         image_path = [
-            'D:/data_set/COCO_images/val2014/COCO_val2014_000000000042.jpg',
-            'D:/data_set/COCO_images/val2014/COCO_val2014_000000000073.jpg',
-            'D:/data_set/COCO_images/train2014/COCO_train2014_000000000009.jpg',
-            'D:/data_set/COCO_images/train2014/COCO_train2014_000000000025.jpg',
+            Config.home / 'dataset/coco_images/val2014/COCO_val2014_000000000042.jpg',
+            Config.home / 'dataset/coco_images/val2014/COCO_val2014_000000000073.jpg',
+            Config.home / 'dataset/coco_images/train2014/COCO_train2014_000000000009.jpg',
+            Config.home / 'dataset/coco_images/train2014/COCO_train2014_000000000025.jpg',
         ]
 
         for path in image_path:
