@@ -79,7 +79,7 @@ def get_seq_mask(seq):
 
 
 def get_pad_mask(seq, padding=0):
-    batch_size, seq_len = seq.shape
+    _, seq_len = seq.shape
     seq = (seq != padding).to(torch.uint8)
     seq = seq.unsqueeze(1).repeat(1, seq_len, 1)
     return seq

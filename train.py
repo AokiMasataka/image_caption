@@ -8,7 +8,7 @@ from torchvision.transforms import Resize
 from transformers import AutoTokenizer
 
 from pipline import build_loader
-from transformer import Transformer, PositionNonAutoregressiveTransformer, MaskTransformer
+from transformer import build_model
 
 
 class Config:
@@ -121,7 +121,7 @@ def _inference(model, tokenizer, image_path):
 def inference():
     tokenizer = AutoTokenizer.from_pretrained(Config.tokenizer_name)
     vocab_size = tokenizer.get_vocab().__len__()
-    model = Transformer(Config, vocab_size).to(Config.device)
+    model = build_model(Config, vocab_size).to(Config.device)
     model.load_state_dict(torch.load(args.weight))
     model.eval()
     return _inference(model, tokenizer, args.image_path)
@@ -141,15 +141,7 @@ def main():
 
     train_loader = build_loader(train_list, Config.train_image_dir, Config.image_size, Config.batch_size, tokenizer)
     vocab_size = tokenizer.get_vocab().__len__()
-    if Config.model_name == 'baseline':
-        model = Transformer(Config, vocab_size)
-    elif Config.model_name == 'PNAT':
-        model = PositionNonAutoregressiveTransformer(Config, vocab_size, Config.max_seq_len)
-    elif Config.model_name == 'mask transform':
-        model = MaskTransformer(Config, vocab_size)
-    else:
-        raise ValueError(f'{Config.model_name} is invalid model name')
-
+    model = build_model(Config, vocab_size)
     trainer = Trainer(model=model, train_loader=train_loader, tokenizer=tokenizer)
     trainer.train()
 

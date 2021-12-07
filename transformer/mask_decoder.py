@@ -27,6 +27,7 @@ class MaskTransformer(nn.Module):
 
         self.length_pred = nn.Linear(config.dim, config.max_seq_len)
         self.vocab_size = vocab_size
+        self.max_seq_len = config.max_seq_len
 
     def forward(self, inputs: dict):
         image = inputs['image']
@@ -36,7 +37,7 @@ class MaskTransformer(nn.Module):
 
         x = self.encoder(image)
         memory = x[:, 1:, :]
-        length = x[:, 1, :]
+        length = x[:, 0, :]
         length = self.length_pred(length)
 
         logit = self.decoder(label, memory, mask)
@@ -45,12 +46,21 @@ class MaskTransformer(nn.Module):
         length_loss = functional.cross_entropy(length, text_len)
         return logit_loss + length_loss
     
+    @torch.inference_mode()
     def inference(self, image):
         x = self.encoder(image)
         memory = x[:, 1:, :]
-        text_length = self.length_pred(x[:, 1, :])
+        text_length = self.length_pred(x[:, 0, :])
+        text_length = text_length.max(dim=1).cpu().numpy()
 
-        query = torch.zeros(text_length.shape[1], dtype=torch.long).unsqueeze(0)
+        # mask id: 4 pad id: 0
+        query = []
+        for index in range(text_length.shape[0]):
+            q = torch.zeros(self.max_seq_len, dtype=torch.long)
+            q[:text_length[index]] = 4
+            query.append(q)
+
+        query = torch.stack(query)
 
         for _ in range(3):
             query = self.decoder(query, memory)
