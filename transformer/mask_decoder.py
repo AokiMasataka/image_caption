@@ -31,38 +31,42 @@ class MaskTransformer(nn.Module):
 
     def forward(self, inputs: dict):
         image = inputs['image']
-        label = inputs['label']
-        text_len = inputs['text_len']
-        mask = inputs['mask']
+        src_length = inputs['length']
+        src_ids = inputs['src_ids']
+        masked_src = inputs['masked_src']
+        src_pad_mask = inputs['src_pad_mask']
 
-        x = self.encoder(image)
-        memory = x[:, 1:, :]
-        length = x[:, 0, :]
-        length = self.length_pred(length)
+        encoder_out = self.encoder(image)
 
-        logit = self.decoder(label, memory, mask)
+        length_pred = self.length_pred(encoder_out[:, 0, :])
+        logit = self.decoder(src_ids, encoder_out[:, 1:, :], src_pad_mask)
         
-        logit_loss = functional.cross_entropy(logit.view(-1, self.vocab_size), label.view(-1), ignore=0)
-        length_loss = functional.cross_entropy(length, text_len)
+        logit = logit.view(-1, self.vocab_size)
+        logit_loss = functional.cross_entropy(logit, masked_src.view(-1), ignore_index=0)
+        length_loss = functional.cross_entropy(length_pred, src_length)
         return logit_loss + length_loss
     
     @torch.inference_mode()
     def inference(self, image):
         x = self.encoder(image)
+        device = x.device
         memory = x[:, 1:, :]
-        text_length = self.length_pred(x[:, 0, :])
-        text_length = text_length.max(dim=1).cpu().numpy()
+        length_pred = self.length_pred(x[:, 0, :]).argmax(dim=1)
+        length_pred = length_pred.cpu().numpy()[0]
 
         # mask id: 4 pad id: 0
-        query = []
-        for index in range(text_length.shape[0]):
-            q = torch.zeros(self.max_seq_len, dtype=torch.long)
-            q[:text_length[index]] = 4
-            query.append(q)
+        query = torch.zeros(length_pred, dtype=torch.long, device=device) + 4
+        query = query.unsqueeze(0)
+        
+        n_i = 3
+        for i in range(n_i):
+            query = self.decoder(query, memory, mask=None)
+            index = query.argmax(dim=2)
+            if i == n_i - 1:
+                break
 
-        query = torch.stack(query)
-
-        for _ in range(3):
-            query = self.decoder(query, memory)
-        return query
+            value = query.max(dim=2).values
+            index[value < 0.001] = 4
+            query = index.long()
+        return index
 

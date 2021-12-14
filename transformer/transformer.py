@@ -1,7 +1,7 @@
 import torch
 from torch import nn
 from torch.nn import functional
-from .transformer_base import EncoderLayer, Encoder, Decoder, PositionalEmbedding, VisionEmbedding
+from .transformer_base import EncoderLayer, Encoder, Decoder, PositionalEmbedding, VisionEmbedding, get_seq_mask
 
 
 class VisionTransformer(nn.Module):
@@ -50,16 +50,16 @@ class Transformer(nn.Module):
 
     def forward(self, inputs: dict):
         image = inputs['image']
-        target = inputs['target']
-        labels = inputs['label']
-        mask = inputs['mask']
+        prov_ids = inputs['prov_ids']
+        next_ids = inputs['next_ids']
+        mask = inputs['prov_mask']
 
         memory = self.encoder(image)
-        logits = self.decoder(target, memory, mask)
+        logits = self.decoder(prov_ids, memory, mask)
 
         logits = logits.view(-1, self.vocab_size)
-        labels = labels.view(-1)
-        return functional.cross_entropy(logits, labels, ignore_index=0)
+        next_ids = next_ids.view(-1)
+        return functional.cross_entropy(logits, next_ids, ignore_index=0)
 
     @torch.inference_mode()
     def inference(self, image):

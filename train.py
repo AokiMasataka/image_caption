@@ -13,14 +13,13 @@ from transformer import build_model
 
 
 class Config:
-    # model name in 'baseline', 'PNAT', 'mask transform'
-    model_name = 'baseline'
+    # model name in 'baseline', 'PNAT', 'mask'
+    model_name = 'mask'
     tokenizer_name = 'cl-tohoku/bert-base-japanese-whole-word-masking'
     
     home = Path(os.path.expanduser('~'))
-    train_image_dir = home / 'dataset/coco_images/train2014/'
+    data_dir = home / 'dataset/coco_images/train/'
     train_pickle_path = 'stair_captions/stair_captions_train.pickle'
-    valid_image_dir = home / 'dataset/COCO_images/val2014/'
     valid_pickle_path = 'stair_captions/stair_captions_valid.pickle'
 
     log_path = f'exp/{model_name}/train.txt'
@@ -65,19 +64,14 @@ class Trainer(Config):
 
     def train_epoch(self, epoch):
         train_loss = AvgManager()
-        for step, (images, target, labels, text_len, mask) in enumerate(self.train_loader, 1):
+        for step, inputs in enumerate(self.train_loader, 1):
             if step % Config.check_point_step == 0:
                 print(f'\rstep: {step}   train loss: {train_loss():.4f}')
                 logger.info(f'step: {step}   train loss: {train_loss():.4f}')
                 self._test_fn()
             
-            inputs = {
-                'image': images.to(self.device),
-                'target': target.to(self.device),
-                'label': labels.to(self.device),
-                'text_len': text_len.to(self.device),
-                'mask': mask.to(self.device)
-            }
+            for key in inputs:
+                inputs[key] = inputs[key].to(Config.device)
 
             self.optimizer.zero_grad()
             loss = self.model(inputs)
@@ -88,7 +82,7 @@ class Trainer(Config):
             print(f'\rstep: {step}   train loss: {loss.item():.4f}', end='')
         print(f'save model to: {Config.weight_dir}/epoch{epoch}_baseline.pth')
         logger.info(f'save model to: {Config.weight_dir}/epoch{epoch}_baseline.pth')
-        torch.save(self.model.state_dict(), f'{Config.weight_dir}/epoch{epoch}_baseline.pth')
+        torch.save(self.model.state_dict(), f'{Config.weight_dir}/epoch{epoch}_{Config.model_name}.pth')
 
     def train(self):
         for epoch in range(self.epochs):
@@ -97,10 +91,10 @@ class Trainer(Config):
     def _test_fn(self):
         self.model.eval()
         image_path = [
-            Config.home / 'dataset/coco_images/val2014/COCO_val2014_000000000042.jpg',
-            Config.home / 'dataset/coco_images/val2014/COCO_val2014_000000000073.jpg',
-            Config.home / 'dataset/coco_images/train2014/COCO_train2014_000000000009.jpg',
-            Config.home / 'dataset/coco_images/train2014/COCO_train2014_000000000025.jpg',
+            str(Config.data_dir / 'COCO_val2014_000000000042.jpg'),
+            str(Config.data_dir / 'COCO_val2014_000000000073.jpg'),
+            str(Config.data_dir / 'COCO_train2014_000000000009.jpg'),
+            str(Config.data_dir / 'COCO_train2014_000000000025.jpg'),
         ]
 
         for path in image_path:
@@ -140,8 +134,8 @@ def main():
 
     train_list = train_list + valid_list
     del valid_list
-
-    train_loader = build_loader(train_list, Config.train_image_dir, Config.image_size, Config.batch_size, tokenizer)
+    
+    train_loader = build_loader(train_list, Config.data_dir, Config.image_size, Config.batch_size, tokenizer)
     vocab_size = tokenizer.get_vocab().__len__()
     model = build_model(Config, vocab_size)
     trainer = Trainer(model=model, train_loader=train_loader, tokenizer=tokenizer)

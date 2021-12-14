@@ -134,3 +134,8 @@ class VisionEmbedding(nn.Module):
 
     def forward(self, image):
         return self.vision_embed(image).flatten(2).transpose(1, 2)
+
+
+def get_seq_mask(seq):
+    batch_size, seq_len = seq.shape
+    return torch.tensor(np.tri(seq_len, dtype=np.uint8)).unsqueeze(0).repeat(batch_size, 1, 1)
