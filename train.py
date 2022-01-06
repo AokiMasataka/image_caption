@@ -13,8 +13,10 @@ from transformer import build_model
 
 
 class Config:
-    # model name in 'baseline', 'PNAT', 'mask'
-    model_name = 'mask'
+    # model name in 'baseline', 'MAT', 'PNAT', 'mask', 'oscar'
+    model_name = 'oscar'
+    exp = 'oscar_exp1'
+    discription = 'add pos attention to encoder layer'
     tokenizer_name = 'cl-tohoku/bert-base-japanese-whole-word-masking'
     
     home = Path(os.path.expanduser('~'))
@@ -22,8 +24,8 @@ class Config:
     train_pickle_path = 'stair_captions/stair_captions_train.pickle'
     valid_pickle_path = 'stair_captions/stair_captions_valid.pickle'
 
-    log_path = f'exp/{model_name}/train.txt'
-    weight_dir = f'exp/{model_name}/weight'
+    log_path = f'exp/{exp}/train.txt'
+    weight_dir = f'exp/{exp}/weight'
 
     image_size = 224
     patch_size = 16
@@ -49,7 +51,8 @@ def config_info():
     logger.info(f'encoder depth: {Config.encoder_depth}')
     logger.info(f'decoder depth: {Config.decoder_depth}')
     logger.info(f'drop prob: {Config.drop_prob}')
-    logger.info(f'LR: {Config.lr}\n')
+    logger.info(f'LR: {Config.lr}')
+    logger.info(f'discription: {Config.discription}\n')
 
 
 class Trainer(Config):
@@ -62,9 +65,18 @@ class Trainer(Config):
         self.model.to(self.device)
         self.optimizer = torch.optim.AdamW(self.model.parameters(), lr=self.lr)
 
-    def train_epoch(self, epoch):
+    def train(self):
+        for epoch in range(self.epochs):
+            self._train_epoch(epoch)
+
+    def _train_epoch(self, epoch):
         train_loss = AvgManager()
         for step, inputs in enumerate(self.train_loader, 1):
+            if step % 50 == 0 and epoch == 0 and step < 2000:
+                print(f'\rstep: {step}   train loss: {train_loss():.4f}')
+                logger.info(f'step: {step}   train loss: {train_loss():.4f}')
+                self._test_fn()
+
             if step % Config.check_point_step == 0:
                 print(f'\rstep: {step}   train loss: {train_loss():.4f}')
                 logger.info(f'step: {step}   train loss: {train_loss():.4f}')
@@ -80,13 +92,9 @@ class Trainer(Config):
 
             train_loss.update(loss.item())
             print(f'\rstep: {step}   train loss: {loss.item():.4f}', end='')
-        print(f'save model to: {Config.weight_dir}/epoch{epoch}_baseline.pth')
-        logger.info(f'save model to: {Config.weight_dir}/epoch{epoch}_baseline.pth')
+        print(f'save model to: {Config.weight_dir}/epoch{epoch}_{Config.model_name}.pth')
+        logger.info(f'save model to: {Config.weight_dir}/epoch{epoch}_{Config.model_name}.pth')
         torch.save(self.model.state_dict(), f'{Config.weight_dir}/epoch{epoch}_{Config.model_name}.pth')
-
-    def train(self):
-        for epoch in range(self.epochs):
-            self.train_epoch(epoch)
 
     def _test_fn(self):
         self.model.eval()
@@ -167,6 +175,7 @@ def get_logger(logging_file, stream=True):
 if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser()
+    parser.add_argument('-c', '--info', action='store_true', default=False)
     parser.add_argument('-m', '--mode', type=str, default='train')
     parser.add_argument('-w', '--weight', type=str, default='weight/')
     parser.add_argument('-i', '--image_path', type=str, default=None)
@@ -175,7 +184,8 @@ if __name__ == '__main__':
     if args.mode == 'train':
         os.makedirs(Config.weight_dir, exist_ok=True)
         logger = get_logger(Config.log_path, stream=False)
-        config_info()
+        if args.info:
+            config_info()
         main()
     elif args.mode == 'inference':
         print('inference mode')
