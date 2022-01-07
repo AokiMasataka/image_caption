@@ -3,7 +3,7 @@ import torch
 from torch import nn
 
 from .transformer_base import Decoder, MultiHeadAttention
-from .transformer import VisionTransformer, Decoder
+from .transformer import VisionTransformer
 
 
 class PNAT(nn.Module):
@@ -27,7 +27,7 @@ class PNAT(nn.Module):
             max_len=config.max_seq_len
         )
     
-    def forward(self):
+    def forward(self, inputs):
         return 0
     
     @torch.inference_mode()
@@ -36,14 +36,19 @@ class PNAT(nn.Module):
 
 
 class Bridge(nn.Module):
-    def __init__(self):
+    def __init__(self, dim, max_seq_len=128):
         super(Bridge, self).__init__()
-        pass
+        self.length_predicter = nn.Linear(dim, max_seq_len)
     
     def forward(self, x):
         return 0
 
 
 class PositionPredicter(nn.Module):
-    def __init__(self):
+    def __init__(self, dim, heads, drop_prob=0.1):
         super(PositionPredicter, self).__init__()
+        self.attention = MultiHeadAttention(dim=dim, heads=heads, drop_prob=drop_prob)
+
+    def forward(self, x):
+        hidden_state = self.attention(x)
+        return hidden_state
