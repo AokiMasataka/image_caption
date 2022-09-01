@@ -1,6 +1,56 @@
 import torch
 from torch import nn
 from torch.nn import functional
+from torchvision import models
+
+
+class Transformer(nn.Module):
+    def __init__(self, cnf, vocab_size):
+        super(Transformer, self).__init__()
+        self.encoder = Encoder(dim=cnf.dim)
+
+        self.decoder = Decoder(
+            dim=cnf.dim, heads=cnf.heads, depth=cnf.decoder_depth, vocab_size=vocab_size, max_len=cnf.max_seq_len
+        )
+        self.max_seq_len = cnf.max_seq_len
+        self.vocab_size = vocab_size
+
+    def forward(self, image, prov_ids, next_ids, mask):
+        memory = self.encoder(image)
+        logits = self.decoder(prov_ids, memory, mask)
+
+        logits = logits.view(-1, self.vocab_size)
+        next_ids = next_ids.view(-1)
+        return functional.cross_entropy(logits, next_ids, ignore_index=0)
+
+    @torch.inference_mode()
+    def inference(self, image, device='cpu'):
+        memory = self.encoder(image)
+        sequence = torch.full((1, 1), fill_value=2, dtype=torch.long, device=device)
+
+        for _ in range(self.max_seq_len):
+            logit = self.decoder(sequence, memory, mask=None)
+            logit = logit[:, -1, :].argmax(dim=1)
+            sequence = torch.cat((sequence, logit.unsqueeze(0)), dim=1)
+            if logit.item() == 3:
+                break
+        return sequence
+
+
+class Encoder(nn.Module):
+    def __init__(self, dim, drop_path_rate=0.1):
+        super(Encoder, self).__init__()
+        self.features = models.convnext_tiny(pretrained=True, drop_path_rate=drop_path_rate).features
+        self.head = nn.Sequential(
+            nn.Dropout(p=0.125),
+            nn.Linear(in_features=768, out_features=dim, bias=True)
+        )
+
+    def forward(self, x):
+        x = self.features(x).flatten(2)
+        x = x.permute(0, 2, 1)
+        x = self.head(x)
+        return x
 
 
 class Decoder(nn.Module):
@@ -95,18 +145,3 @@ class PositionalEmbedding(nn.Module):
 
     def forward(self, x):
         return self.pos_embed[:x.shape[1], :] + x
-
-
-class VisionEmbedding(nn.Module):
-    def __init__(self, dim, patch_size):
-        super(VisionEmbedding, self).__init__()
-        patch_t2 = (patch_size, patch_size)
-        self.vision_embed = nn.Conv2d(in_channels=3, out_channels=dim, kernel_size=patch_t2, stride=patch_t2)
-
-    def forward(self, image):
-        return self.vision_embed(image).flatten(2).transpose(1, 2)
-
-
-def get_seq_mask(seq):
-    batch_size, seq_len = seq.shape
-    return torch.tensor(np.tri(seq_len, dtype=np.uint8)).unsqueeze(0).repeat(batch_size, 1, 1)

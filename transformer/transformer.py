@@ -1,33 +1,7 @@
 import torch
 from torch import nn
 from torch.nn import functional
-from .transformer_base import EncoderLayer, Encoder, Decoder, PositionalEmbedding, VisionEmbedding, get_seq_mask
-
-
-class VisionTransformer(nn.Module):
-    def __init__(self, image_size, patch_size, dim, depth, heads, drop_prob, length_pred=False):
-        super(VisionTransformer, self).__init__()
-        seq_len = (image_size // patch_size) ** 2
-        seq_len = seq_len + 1 if length_pred else seq_len
-        self.length_pred = length_pred
-
-        self.image_embed = VisionEmbedding(dim, patch_size)
-        self.pos_embed = PositionalEmbedding(dim, seq_len)
-        if self.length_pred:
-            self.query = nn.Parameter(torch.rand(1, 1, dim))
-
-        self.encoder_layer = nn.Sequential(
-            *[EncoderLayer(dim, heads, drop_prob=drop_prob, attention_drop_prob=drop_prob) for _ in range(depth)]
-        )
-
-    def forward(self, x):
-        batch = x.shape[0]
-        x = self.image_embed(x)
-        if self.length_pred:
-            x = torch.cat((self.query.repeat(batch, 1, 1), x), dim=1)
-        x = self.pos_embed(x)
-        x = self.encoder_layer(x)
-        return x
+from .transformer_base import Decoder
 
 
 class Transformer(nn.Module):

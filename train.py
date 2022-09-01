@@ -1,28 +1,24 @@
 import os
 import logging
-import pickle
 import torch
-from pathlib import Path
 from torchvision.io import read_image
 from torchvision.io.image import ImageReadMode
 from torchvision.transforms import Resize
 from transformers import AutoTokenizer
 
 from pipeline import build_loader
-from transformer import build_model
+from caption_model import Transformer
 
 
 class Config:
     # model name in 'baseline', 'MAT', 'PNAT', 'mask', 'oscar'
-    model_name = 'oscar'
-    exp = 'oscar_exp1'
-    discription = 'add pos attention to encoder layer'
+    model_name = 'custom'
+    exp = 'custom'
+    discription = ''
     tokenizer_name = 'cl-tohoku/bert-base-japanese-whole-word-masking'
-    
-    home = Path(os.path.expanduser('~'))
-    data_dir = home / 'dataset/coco_images/train/'
-    train_pickle_path = 'stair_captions/stair_captions_train.pickle'
-    valid_pickle_path = 'stair_captions/stair_captions_valid.pickle'
+
+    train_data_path = 'stair_captions/stair_captions_train_data.txt'
+    valid_data_path = 'stair_captions/stair_captions_valid_data.txt'
 
     log_path = f'exp/{exp}/train.txt'
     weight_dir = f'exp/{exp}/weight'
@@ -32,12 +28,12 @@ class Config:
     dim = 384
     heads = 8
     encoder_depth = 8
-    decoder_depth = 8
+    decoder_depth = 4
     max_seq_len = 128
     drop_prob = 0.125
 
     epochs = 4
-    batch_size = 16
+    batch_size = 64
     lr = 0.00005
     check_point_step = 4000
     device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
@@ -56,13 +52,19 @@ def config_info():
 
 
 class Trainer(Config):
-    def __init__(self, model, train_loader, tokenizer):
-        os.makedirs(Config.weight_dir, exist_ok=True)
+    def __init__(self):
+        os.makedirs(self.weight_dir, exist_ok=True)
 
-        self.train_loader = train_loader
-        self.tokenizer = tokenizer
-        self.model = model
-        self.model.to(self.device)
+        self.tokenizer = AutoTokenizer.from_pretrained(self.tokenizer_name)
+        self.train_loader = build_loader(
+            data_path=[self.train_data_path, self.valid_data_path],
+            image_size=self.image_size,
+            batch_size=self.batch_size,
+            tokenizer=self.tokenizer,
+            train=True
+        )
+
+        self.model = Transformer(Config, self.tokenizer.vocab_size).to(self.device)
         self.optimizer = torch.optim.AdamW(self.model.parameters(), lr=self.lr)
 
     def train(self):
@@ -70,23 +72,13 @@ class Trainer(Config):
             self._train_epoch(epoch)
 
     def _train_epoch(self, epoch):
+        self.model.train()
         train_loss = AvgManager()
-        for step, inputs in enumerate(self.train_loader, 1):
-            if step % 50 == 0 and epoch == 0 and step < 2000:
-                print(f'\rstep: {step}   train loss: {train_loss():.4f}')
-                logger.info(f'step: {step}   train loss: {train_loss():.4f}')
-                self._test_fn()
-
-            if step % Config.check_point_step == 0:
-                print(f'\rstep: {step}   train loss: {train_loss():.4f}')
-                logger.info(f'step: {step}   train loss: {train_loss():.4f}')
-                self._test_fn()
-            
-            for key in inputs:
-                inputs[key] = inputs[key].to(Config.device)
+        for step, (images, prov_ids, next_ids, mask) in enumerate(self.train_loader, 1):
+            images, prov_ids, next_ids, mask = images.cuda(), prov_ids.cuda(), next_ids.cuda(), mask.cuda()
 
             self.optimizer.zero_grad()
-            loss = self.model(inputs)
+            loss = self.model(images, prov_ids, next_ids, mask)
             loss.backward()
             self.optimizer.step()
 
@@ -98,56 +90,13 @@ class Trainer(Config):
 
     def _test_fn(self):
         self.model.eval()
-        image_path = [
-            str(Config.data_dir / 'COCO_val2014_000000000042.jpg'),
-            str(Config.data_dir / 'COCO_val2014_000000000073.jpg'),
-            str(Config.data_dir / 'COCO_train2014_000000000009.jpg'),
-            str(Config.data_dir / 'COCO_train2014_000000000025.jpg'),
-        ]
-
-        for path in image_path:
-            text = _inference(self.model, self.tokenizer, path)
+        for index in range(4):
+            image, _ = self.train_loader.dataset.__getitem__(0)
+            image = image.unsqueeze(0).to(self.device)
+            sequence = self.model.inference(image).squeeze(0)
+            text = self.tokenizer.decode(sequence.tolist())
             print(f'caption: {text}')
             logger.info(f'caption: {text}')
-        self.model.eval()
-
-
-def _inference(model, tokenizer, image_path):
-    image = read_image(path=image_path, mode=ImageReadMode.RGB).unsqueeze(0)
-    image = Resize(size=(Config.image_size, Config.image_size))(image)
-    image = image.float() / 255.0
-    image = image.to(Config.device)
-    sequence = model.inference(image).squeeze(0)
-    text = tokenizer.decode(sequence.tolist())
-    return text
-
-
-def inference():
-    tokenizer = AutoTokenizer.from_pretrained(Config.tokenizer_name)
-    vocab_size = tokenizer.get_vocab().__len__()
-    model = build_model(Config, vocab_size).to(Config.device)
-    model.load_state_dict(torch.load(args.weight))
-    model.eval()
-    return _inference(model, tokenizer, args.image_path)
-
-
-def main():
-    os.makedirs(Config.weight_dir, exist_ok=True)
-    tokenizer = AutoTokenizer.from_pretrained(Config.tokenizer_name)
-    with open(Config.train_pickle_path, mode='rb') as f:
-        train_list = pickle.load(f)
-
-    with open(Config.valid_pickle_path, mode='rb') as f:
-        valid_list = pickle.load(f)
-
-    train_list = train_list + valid_list
-    del valid_list
-    
-    train_loader = build_loader(train_list, Config.data_dir, Config.image_size, Config.batch_size, tokenizer)
-    vocab_size = tokenizer.get_vocab().__len__()
-    model = build_model(Config, vocab_size)
-    trainer = Trainer(model=model, train_loader=train_loader, tokenizer=tokenizer)
-    trainer.train()
 
 
 class AvgManager:
@@ -172,23 +121,21 @@ def get_logger(logging_file, stream=True):
     return logger
 
 
+def main():
+    os.makedirs(Config.weight_dir, exist_ok=True)
+    trainer = Trainer()
+    trainer.train()
+
+
 if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser()
     parser.add_argument('-c', '--info', action='store_true', default=False)
-    parser.add_argument('-m', '--mode', type=str, default='train')
     parser.add_argument('-w', '--weight', type=str, default='weight/')
     parser.add_argument('-i', '--image_path', type=str, default=None)
     args = parser.parse_args()
 
-    if args.mode == 'train':
-        os.makedirs(Config.weight_dir, exist_ok=True)
-        logger = get_logger(Config.log_path, stream=False)
-        if args.info:
-            config_info()
-        main()
-    elif args.mode == 'inference':
-        print('inference mode')
-        inference_text = inference()
-        print(f'image path: {args.image_path}')
-        print(f'caption: {inference_text}')
+    logger = get_logger(Config.log_path, stream=False)
+    if args.info:
+        config_info()
+    main()
