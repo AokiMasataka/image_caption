@@ -48,15 +48,33 @@ def write(export, obj):
         pickle.dump(obj, f)
 
 
+def marge_train_valid():
+    train_path = './stair_captions/stair_captions_train_data.txt'
+    valid_path = './stair_captions/stair_captions_valid_data.txt'
+
+    with open(train_path, 'r', encoding='UTF-8') as f:
+        train_data = f.read()
+    
+    with open(valid_path, 'r', encoding='UTF-8') as f:
+        valid_data = f.read()
+    
+    full_data = train_data + '\n' + valid_data
+
+    with open('./stair_captions/stair_captions_full_data.txt', 'w', encoding='UTF-8') as f:
+        f.write(full_data)
+
+
+
 def main():
-    train_data = make_ant('stair_captions/stair_captions_v1.2_train.json', prefix='D:/Dataset/coco_images/train2014')
-    with open('stair_captions/stair_captions_train_data.txt', 'w', encoding='UTF-8') as f:
+    train_data = make_ant('./stair_captions/stair_captions_v1.2_train.json', prefix='D:/Dataset/coco_images/train2014')
+    with open('./stair_captions/stair_captions_train_data.txt', 'w', encoding='UTF-8') as f:
         f.write(train_data)
 
-    train_data = make_ant('stair_captions/stair_captions_v1.2_val.json', prefix='D:/Dataset/coco_images/val2014')
-    with open('stair_captions/stair_captions_valid_data.txt', 'w', encoding='UTF-8') as f:
+    train_data = make_ant('./stair_captions/stair_captions_v1.2_val.json', prefix='D:/Dataset/coco_images/val2014')
+    with open('./stair_captions/stair_captions_valid_data.txt', 'w', encoding='UTF-8') as f:
         f.write(train_data)
 
 
 if __name__ == '__main__':
-    main()
+    marge_train_valid()
+    # main()
